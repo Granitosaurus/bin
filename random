@@ -1,0 +1,17 @@
+#!/bin/python3
+"""
+generates random number between first and second arguments
+"""
+from random import randint
+import sys
+
+if len(sys.argv) < 2:
+    sys.exit('Usage: random start end')
+a = int(sys.argv[1])
+if len(sys.argv) > 2:
+    b = int(sys.argv[2])
+else:
+    b = a
+    a = 0
+print(randint(a, b))
+

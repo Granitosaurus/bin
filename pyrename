@@ -1,0 +1,29 @@
+#!/bin/python3
+"""
+Renaming tool that evaluates python syntax for every file in current directory 
+"""
+import os
+import sys
+import argparse
+import re
+
+if len(sys.argv) < 2 or '-help' in sys.argv[1]:
+    print(
+        'Replace file name with evaluated python script value\n'
+        'Usage:\n'
+        'pyrename "python script where file is current file name"\n'
+        'examples:\n'
+        '- pyrename "file.lower()"\n\t Will lowercase all filenames\n'
+        '- pyrename "file.replace("-","_")"\n\t replace dashes with underscores\n'
+        '- pyrename "re.sub("\d", "")"\n\t get rid of any numbers\n'
+    )
+    sys.exit()
+cwd = os.getcwd()
+func = sys.argv[1]
+count = 0
+for file in os.listdir(cwd):
+    new_name = eval(func)
+    if new_name != file:
+        count += 1
+        os.rename(file, new_name)
+sys.exit("renamed {} files".format(count))
