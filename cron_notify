@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+. "$HOME/.dbus/Xdbus"
+notify-send "$1" "$2"
+
