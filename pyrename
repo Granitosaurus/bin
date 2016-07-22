@@ -21,9 +21,9 @@ if len(sys.argv) < 2 or '-help' in sys.argv[1]:
 cwd = os.getcwd()
 func = sys.argv[1]
 count = 0
-for file in os.listdir(cwd):
+for filename in os.listdir(cwd):
     new_name = eval(func)
-    if new_name != file:
+    if new_name and new_name != filename:
         count += 1
-        os.rename(file, new_name)
+        os.rename(filename, new_name)
 sys.exit("renamed {} files".format(count))
