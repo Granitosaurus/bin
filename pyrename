@@ -4,7 +4,6 @@ Renaming tool that evaluates python syntax for every file in current directory
 """
 import os
 import sys
-import argparse
 import re
 
 if len(sys.argv) < 2 or '-help' in sys.argv[1]:
