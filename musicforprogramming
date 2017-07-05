@@ -1,0 +1,46 @@
+#! /usr/bin/env python3
+import click
+import re
+import requests
+from urllib.parse import urlparse
+import subprocess
+
+"""
+Simple downloader for music tracks from http://musicforprogramming.net
+author: Granitosaurus, bernardas.alisauskas@gmail.com
+requires: python3 - requests, click
+"""
+
+
+def download(track_range, show=False):
+    resp = requests.get('http://musicforprogramming.net/rss.php')
+    urls = re.findall('<guid>(.+?)</guid>', resp.text)
+    for item in urls[::-1]:
+        index = re.findall('ming_(\d+)', item)
+        if not index or int(index[0]) not in track_range:
+            continue
+        filename = urlparse(item).path.split('programming_')[-1]
+        if show:
+            print(filename)
+        else:
+            subprocess.call('wget "{}" -O "{}" -q --show-progress'.format(item, filename), shell=True)
+
+
+@click.command()
+@click.argument('tracks')
+@click.option('--show', help='just show available tracks without downloading', is_flag=True)
+def cli(tracks, show):
+    """
+    Download tracks from musicforprogramming.net,
+    track argument should be either a number or range, e.g. 1 or 1-5
+    """
+    if '-' in tracks:
+        track_range = range(*[int(i) for i in tracks.split('-')])
+    else:
+        tracks = int(tracks)
+        track_range = range(tracks, tracks + 1)
+    download(track_range, show)
+
+
+if __name__ == '__main__':
+    cli()
