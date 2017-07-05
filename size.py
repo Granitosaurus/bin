@@ -1,26 +1,17 @@
-#!/usr/bin/env python3
 import sys
 import os
-import shutil
-import tempfile
-
-import click
 
 
-@click.command()
-@click.argument('input', required=False, type=click.File('r'))
-@click.argument('output', required=False, type=click.File('w'))
-@click.option('-tmp', 'tmp', help='pipe to tmp file', is_flag=True)
-def cli(input, output, tmp):
-    """Simple, pipeable tool for indenting text"""
-    rows, columns = shutil.get_terminal_size()
-    sys.stdout.write('rows:{}\ncols:{}\n'.format(rows, columns))
-    # for line in source:
-    #     text = format_.format(line.strip())
-    #     if output:
-    #         output.write(text)
-    #     else:
-    #         sys.stdout.write(text)
+def get_terminal_size():
+    for i in range(0, 3):
+        try:
+            columns, rows = os.get_terminal_size(i)
+        except OSError:
+            continue
+        break
+    else:
+        columns, rows = (80, 24)  # set default in case all fail
+    return columns, rows
 
-if __name__ == "__main__":
-    cli()
+
+sys.stdout.write('cols:{}\nrows:{}\n'.format(*get_terminal_size()))
