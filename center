@@ -1,8 +1,31 @@
 #!/usr/bin/env python3
-
+import click
 import sys
+import shutil
+
+
+@click.command()
+@click.argument('input', required=False, type=click.File('r'))
+@click.argument('output', required=False, type=click.File('w'))
+@click.option('-l', '--length', help='maximum line length [default:current terminal size]', type=click.INT)
+@click.option('-i', '--indent', help='indent text instead of centering', is_flag=True)
+def cli(input, output, length, indent):
+    """Simple, pipeable tool for centering text"""
+    columns = shutil.get_terminal_size()[0]
+    source = input.readlines() if input else sys.stdin
+    if indent:
+        source = list(source)
+        max_line = len(sorted(source, key=len, reverse=True)[0])
+        indent_size = int((columns - max_line) / 2)
+        format_ = '{}{{}}\n'.format(indent_size * ' ')
+    else:
+        format_ = '{{:^{}}}\n'.format(length or int(columns))
+    for line in source:
+        text = format_.format(line.strip())
+        if output:
+            output.write(text)
+        else:
+            sys.stdout.write(text)
 
 if __name__ == "__main__":
-    for line in sys.stdin:
-        # sys.stderr.write("DEBUG: got line: " + line)
-        sys.stdout.write('{:^80}'.format(line))
+    cli()
