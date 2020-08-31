@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""
+sync redis set between two local and upstream redis instances
+upstream redis instance is defined with these environment variables
+    REDIS_HOT, REDIS_PORT, REDIS_DB, REDIS_PASS
+
+Examples:
+    This example clears local set and syncs it with upstream set:
+
+    ```
+    $ redis-sync-set stackexchange:test --from upstream --clear
+    syncing from Redis<ConnectionPool<Connection<host=redis1.oxyleads.com,port=6380,db=None>>>
+    syncing to Redis<ConnectionPool<Connection<host=localhost,port=6379,db=0>>>
+    move stackexchange:test (size 1000) -> (size 1000) ? [y/N]: y
+    moved: stackexchange:test: 1000
+    ```
+"""
+import os
+
+import click
+from click import echo
+from redis import Redis
+
+
+@click.command()
+@click.argument('key')
+@click.option('--from', 'from_', type=click.Choice(['local', 'upstream']), default='local')
+@click.option('--to', type=click.Choice(['local', 'upstream']), default='upstream')
+@click.option('--clear', is_flag=True, help='clear current values in "to" target')
+def main(key, from_, to, clear):
+    """
+    sync redis set between two redis instances
+    """
+    if from_ == 'upstream':
+        to = 'local'
+    if to == 'local':
+        from_ = 'upstream'
+    env = lambda key, default=None: os.environ.get(key, default)
+    local = Redis()
+    missing = [key for key in ['REDIS_HOST', 'REDIS_PORT', 'REDIS_PASS'] if key not in os.environ]
+    if missing:
+        echo(f'missing environment variables: {missing}', err=True)
+        exit(1)
+    upstream = Redis(host=env('REDIS_HOST'), port=env('REDIS_PORT'), db=env('REDIS_DB'), password=env('REDIS_PASS'))
+    redis = {
+        'local': local,
+        'upstream': upstream
+    }
+    move(key, redis[from_], redis[to], clear=clear)
+
+
+def move(key, from_, to, clear=False):
+    click.echo(f'syncing from {from_}')
+    click.echo(f'syncing to {to}')
+    key_type = from_.type(key)
+    values = None
+    if key_type == b'set':
+        confirm = click.confirm(f'move {key} (size {from_.scard(key)}) -> (size {to.scard(key)}) ?')
+        if not confirm:
+            return
+        values = from_.smembers(key)
+    if key_type == b'list':
+        confirm = click.confirm(f'move {key} (size {from_.llen(key)}) -> (size {to.llen(key)}) ?')
+        if not confirm:
+            return
+        values = from_.lrange(key, 0, -1)
+    if values:
+        if clear:
+            to.delete(key)
+        if key_type == b'set':
+            to.sadd(key, *values)
+            click.echo(f'moved: {key}: {to.scard(key)}')
+        else:
+            BSIZE = 50_000
+            for i in range(0, len(values), BSIZE):
+                chunk = values[i:i + BSIZE]
+                to.rpush(key, *chunk)
+                click.echo(f'moved {i}:{i + BSIZE}')
+            click.echo(f'moved: {key}: {to.llen(key)}')
+
+
+if __name__ == '__main__':
+    main(obj={})
