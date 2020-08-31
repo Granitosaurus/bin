@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Start ptpython shell with redis object"""
+"""
+Start ptpython shell with redis object
+
+License: GPLv3
+Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
+"""
 import inspect
 import os
 from pathlib import Path
 
 import click
-from click import echo
-from redis import Redis
 from ptpython.repl import embed
+from redis import Redis
 
 
 @click.command()
@@ -24,8 +28,11 @@ from ptpython.repl import embed
 @click.option('-b', '--as_bytes', is_flag=True, help='do not decode responses')
 @click.option('-s', '--silent', is_flag=True, help='do not print stuff')
 def main(host, port, password, as_bytes, silent, history, database):
-    # if silent:
-    #     echo = lambda v: None
+    """start ptpython shell with redis object and expanded commands"""
+    if silent:
+        echo = lambda v: None
+    else:
+        echo = click.echo
     redis = Redis(
         host=host,
         port=os.environ.get('REDIS_PORT'),
@@ -33,10 +40,11 @@ def main(host, port, password, as_bytes, silent, history, database):
         decode_responses=not as_bytes,
         db=database,
     )
+    r = redis
     for attr_name in dir(redis):
         attr = getattr(redis, attr_name)
         if inspect.ismethod(attr) and not attr_name.startswith('_'):
-            locals()[attr_name.upper()] = attr
+            locals()[attr_name] = attr
     echo(f'connected to: {redis}')
     embed(
         vi_mode=True,
