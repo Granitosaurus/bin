@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+"""
+simple jsonlines to json converted
+usage: jl-to-json foo.jl > foo.json
+
+License: GPLv3
+Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
+"""
+import json
+
+import click
+from click import echo
+
+
+@click.command()
+@click.argument('file', type=click.File('r'))
+@click.argument('key', default='id')
+def main(file, key):
+    """
+    simple jsonlines to json converted
+    usage: jl-to-json foo.jl > foo.json
+    """
+    data = {}
+    for line in file:
+        d = json.loads(line)
+        data[d[key]] = d
+    echo(json.dumps(data, ensure_ascii=False))
+
+
+if __name__ == '__main__':
+    main()
