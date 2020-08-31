@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+import click
+import random
+
+
+@click.command()
+@click.argument('text')
+def main(text):
+    new = ''
+    for char in text:
+        if random.randint(0, 1):
+            new += char.upper()
+        else:
+            new += char
+    click.echo(new)
+
+
+if __name__ == '__main__':
+    main()
