@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Start ptpython shell with redis object"""
+import inspect
+import os
+from pathlib import Path
+
+import click
+from click import echo
+from redis import Redis
+from ptpython.repl import embed
+
+
+@click.command()
+@click.option('-h', '--host', default=os.environ.get('REDIS_HOST'),
+              help='server address', show_default=True)
+@click.option('-n', '--database', default=0,
+              help='database number', show_default=True)
+@click.option('-p', '--port', default=os.environ.get('REDIS_PORT'),
+              help='server port', show_default=True)
+@click.option('-a', '--pass', 'password', default=os.environ.get('REDIS_PASS'),
+              help='server password')
+@click.option('-h', '--history', default=Path(__file__).parent / 'ptredis.history',
+              help='command history file location', show_default=True)
+@click.option('-b', '--as_bytes', is_flag=True, help='do not decode responses')
+@click.option('-s', '--silent', is_flag=True, help='do not print stuff')
+def main(host, port, password, as_bytes, silent, history, database):
+    # if silent:
+    #     echo = lambda v: None
+    redis = Redis(
+        host=host,
+        port=os.environ.get('REDIS_PORT'),
+        password=os.environ.get('REDIS_PASS'),
+        decode_responses=not as_bytes,
+        db=database,
+    )
+    for attr_name in dir(redis):
+        attr = getattr(redis, attr_name)
+        if inspect.ismethod(attr) and not attr_name.startswith('_'):
+            locals()[attr_name.upper()] = attr
+    echo(f'connected to: {redis}')
+    embed(
+        vi_mode=True,
+        history_filename=history,
+        locals=locals(),
+        globals=globals(),
+        title=f"Python Redis @ {host}",
+    )
+
+
+if __name__ == '__main__':
+    main()
