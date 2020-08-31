@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""
+Generate random numbers to redis list or set
+
+License: GPLv3
+Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
+"""
+import os
+import random
+import sys
+
+import click
+from click import echo
+from redis import Redis
+
+PROGRESSLESS_BAR_KWARGS = dict(show_pos=True, width=50, empty_char='░', fill_char='▓')
+PROGRESS_BAR_KWARGS = {**PROGRESSLESS_BAR_KWARGS, **dict(show_percent=True)}
+
+
+@click.command()
+@click.argument('key')
+@click.argument('start', type=click.INT)
+@click.argument('end', type=click.INT)
+@click.option('--shuffle', '-s', is_flag=True, help='shuffle before adding')
+def main(key, start, end, shuffle):
+    """
+    Generate random numbers to redis list or set
+    """
+    env = lambda key, default=None: os.environ.get(key, default)
+    missing = [key for key in ['REDIS_HOST', 'REDIS_PORT', 'REDIS_PASS'] if key not in os.environ]
+    if missing:
+        echo(f'missing environment variables: {missing}', err=True)
+        exit(1)
+    redis = Redis(
+        host=env('REDIS_HOST'), port=env('REDIS_PORT'), db=env('REDIS_DB'),
+        password=env('REDIS_PASS'), decode_responses=True)
+
+    values = list(range(start, end))
+    if shuffle:
+        random.shuffle(values)
+    click.echo(f'uploading {len(values)} to {str(redis)}')
+    if not click.confirm(f'confirm random sample: {random.sample(values, 8)} of {len(values)} elements'):
+        return 1
+
+    key_type = redis.type(key)
+    if key_type == 'set':
+        add_func = redis.sadd
+    elif key_type == 'list':
+        add_func = redis.lpush
+    elif key_type == 'none':
+        add_func = redis.lpush
+    else:
+        raise ValueError(f'unsupported key type {key_type} for {key}')
+
+    BSIZE = 500_000
+    batch = []
+    with click.progressbar(values, **PROGRESS_BAR_KWARGS) as vs:
+        for v in vs:
+            batch.append(v)
+            if len(batch) == BSIZE:
+                add_func(key, *batch)
+                batch = []
+    if batch:
+        add_func(key, *batch)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
