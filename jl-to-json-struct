@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+"""
+Restructure jsonlines file to structured json hash table
+
+usage: jl-to-map-struct foo.jl 'name' > foo.json
+
+License: GPLv3
+Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
+"""
+import json
+
+import click
+from click import echo
+
+
+@click.command()
+@click.argument('file', type=click.File('r'))
+@click.argument('key', default='id')
+def main(file, key):
+    """restructure jsonlines file to structured json hash table by given key"""
+    data = {}
+    for line in file:
+        d = json.loads(line)
+        if '.' in key:
+            id = d
+            for k in key.split('.'):
+                id = id[k]
+        else:
+            id = id[k]
+        data[id] = d
+    echo(json.dumps(data, indent=2, ensure_ascii=False))
+    echo(f'converted {len(data)} items', err=True)
+
+
+if __name__ == '__main__':
+    main()
