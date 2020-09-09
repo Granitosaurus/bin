@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+Start ptpython shell with playwright browser attached.
+In other words it's a python shell for a web browser!
+
+Example:
+    $ ptplaywright
+    > page.goto('http://httpbin.org/headers')
+    <playwright.sync_api.Response object at 0x7f28c978a4c0>
+    > _.json()
+    {'headers': {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'en-US,en;q=0.9', 'Host': 'httpbin.org', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4217.0 Safari/537.36', 'X-Amzn-Trace-Id': 'Root=1-5f586f57-617a71347d54d6dfad1bc4d8'}}
+
+Requirements:
+    click, playwright, nest_asyncio, ptpython
+
+License: GPLv3
+Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
+"""
+from pathlib import Path
+
+import click
+import nest_asyncio
+from click import echo
+from playwright import sync_playwright
+from playwright.page import Page
+from playwright.sync_api import Browser, BrowserType
+from ptpython.repl import embed
+
+# this is required for ptpython playing nicely with playwright because async magic
+nest_asyncio.apply()
+
+
+@click.command()
+@click.argument('start_urls', nargs=-1)
+@click.option('-b', '--browser', 'browser_type', type=click.Choice(['firefox', 'chromium', 'webkit']),
+              default='chromium')
+@click.option('-d', '--devtools', is_flag=True, help='open devtools (only chromium)')
+@click.option('-h', '--headless', is_flag=True, help='browser in headless mode')
+@click.option('--history', default=Path(__file__).parent / 'ptplaywright.history',
+              help='command history file location', show_default=True)
+def main(start_urls, browser_type, history, devtools, headless):
+    """start ptpython shell with playwright browser"""
+    echo(f'starting {browser_type} in {"headless" if headless else "window"} mode')
+    with sync_playwright() as pw:
+        browser_type: BrowserType = getattr(pw, browser_type)
+        browser: Browser = browser_type.launch(headless=headless, devtools=devtools)
+        page: Page = browser.newPage()
+        for url in start_urls:
+            echo(f'preloading: {url}')
+            page.goto(url)
+        echo(f'loaded on: {page.url}')
+        embed(
+            patch_stdout=True,
+            vi_mode=True,
+            history_filename=history,
+            locals=locals(),
+            globals=globals(),
+            title=f"ptplaywright",
+        )
+
+
+if __name__ == '__main__':
+    main()
