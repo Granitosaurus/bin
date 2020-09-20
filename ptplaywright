@@ -9,6 +9,14 @@ Example:
     <playwright.sync_api.Response object at 0x7f28c978a4c0>
     > _.json()
     {'headers': {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'en-US,en;q=0.9', 'Host': 'httpbin.org', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4217.0 Safari/537.36', 'X-Amzn-Trace-Id': 'Root=1-5f586f57-617a71347d54d6dfad1bc4d8'}}
+    # another example
+    # goto to hacker news
+    > page.goto('https://news.ycombinator.com')
+    # click on first comments link
+    > page.click('.subtext>a:last-of-type')
+    # type in text in comment box
+    > page.type('textarea', 'hello world')
+
 
 Requirements:
     click, playwright, nest_asyncio, ptpython
@@ -16,39 +24,112 @@ Requirements:
 License: GPLv3
 Author: Bernardas Ališauskas <bernardas.alisauskas@pm.me>
 """
+import inspect
+import os
+from ast import literal_eval
 from pathlib import Path
 
 import click
 import nest_asyncio
 from click import echo
 from playwright import sync_playwright
+from playwright.helper import ProxyServer
 from playwright.page import Page
 from playwright.sync_api import Browser, BrowserType
+from playwright_stealth import StealthConfig
 from ptpython.repl import embed
+from urllib.parse import parse_qs
 
 # this is required for ptpython playing nicely with playwright because async magic
 nest_asyncio.apply()
 
+XDG_CACHE_HOME = Path(os.environ.get('XDG_CACHE_HOME', "~/.cache")).expanduser()
+
+
+def parse_url(url):
+    """ptpython supports url parameters that are preappended to url before :: separator"""
+    try:
+        params, url = url.split('::http', 1)
+        url = 'http' + url
+    except ValueError:
+        return url, {}
+    parsed = {}
+    for key, value in parse_qs(params).items():
+        try:
+            parsed[key] = literal_eval(value[0])
+        except ValueError:  # if cannot be evaluated treat it as a string
+            parsed[key] = value[0]
+
+    return url, parsed
+
 
 @click.command()
 @click.argument('start_urls', nargs=-1)
+# options
 @click.option('-b', '--browser', 'browser_type', type=click.Choice(['firefox', 'chromium', 'webkit']),
-              default='chromium')
+              default='chromium', help='which browser to use')
+@click.option('-e', '--eval', 'eval_on_load', help='eval python on load')
+@click.option('-u', '--proxy-user', help='proxy user', default=os.environ.get('PROXY_USER'), show_default=True)
+@click.option('-a', '--proxy-pass', help='proxy password', default=os.environ.get('PROXY_PASS'))
+@click.option('-p', '--proxy', help='proxy url', default=os.environ.get('PROXY'), show_default=True)
+@click.option('-g', '--user-agent', help='user agent to use for requests',
+              default=os.environ.get('USER_AGENT'), show_default=True)
+@click.option('--viewport', help='viewport size', default='1920x1080', show_default=True)
+@click.option('--exec', help='use direct browser executable instead (eg /usr/bin/chromium)')
+@click.option('--history', default=XDG_CACHE_HOME / 'ptplaywright.history',
+              help='command history file location', show_default=True)
+# flags
+@click.option('-x', '--exit', 'exit_on_load', is_flag=True, help='exit on load')
 @click.option('-d', '--devtools', is_flag=True, help='open devtools (only chromium)')
 @click.option('-h', '--headless', is_flag=True, help='browser in headless mode')
-@click.option('--history', default=Path(__file__).parent / 'ptplaywright.history',
-              help='command history file location', show_default=True)
-def main(start_urls, browser_type, history, devtools, headless):
+@click.option('-s', '--stealth', is_flag=True, help='apply playwright_stealth stealth techniques')
+@click.option('--no-js', is_flag=True, help='disable javascript')
+def main(start_urls, browser_type, history, devtools, headless, stealth, exec, viewport, no_js, proxy, proxy_user,
+         proxy_pass, user_agent, eval_on_load, exit_on_load):
     """start ptpython shell with playwright browser"""
-    echo(f'starting {browser_type} in {"headless" if headless else "window"} mode')
+    echo(f'starting {browser_type} in {"headless" if headless else "window"} mode', err=True)
+    if proxy:
+        proxy = ProxyServer(
+            server=proxy,
+            username=proxy_user,
+            password=proxy_pass,
+        )
     with sync_playwright() as pw:
         browser_type: BrowserType = getattr(pw, browser_type)
-        browser: Browser = browser_type.launch(headless=headless, devtools=devtools)
-        page: Page = browser.newPage()
+        browser: Browser = browser_type.launch(
+            headless=headless,
+            devtools=devtools,
+            executablePath=exec,
+            proxy=proxy
+        )
+        viewport = [int(v) for v in viewport.split('x')]
+        page: Page = browser.newPage(
+            viewport={"width": viewport[0], "height": viewport[1]},
+            userAgent=user_agent,
+            javaScriptEnabled=not no_js,
+        )
+        # expand page methods to locals for easier access
+        for attr_name in dir(page):
+            attr = getattr(page, attr_name)
+            if inspect.ismethod(attr) and not attr_name.startswith('_'):
+                locals()[attr_name] = attr
+        if stealth:
+            try:
+                from playwright_stealth import stealth_sync
+            except ImportError:
+                echo('cannot apply stealth as playwright_stealth package is missing!', err=True)
+                return 1
+            stealth_sync(page, StealthConfig())
+        # stealth_sync(page)
         for url in start_urls:
-            echo(f'preloading: {url}')
-            page.goto(url)
-        echo(f'loaded on: {page.url}')
+            url, params = parse_url(url)
+            echo(f'preloading: {url} with {params}', err=True)
+            resp = page.goto(url, **params)
+        echo(f'loaded on: {page.url}', err=True)
+        if eval_on_load:
+            echo(eval(eval_on_load))
+        if exit_on_load:
+            return 0
         embed(
             patch_stdout=True,
             vi_mode=True,
@@ -57,7 +138,8 @@ def main(start_urls, browser_type, history, devtools, headless):
             globals=globals(),
             title=f"ptplaywright",
         )
+        return 0
 
 
 if __name__ == '__main__':
-    main()
+    exit(main())
