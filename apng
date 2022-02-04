@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""
+CLI tool for splitting and joining animated PNGS (APNG)
+requires: pip install click apng
+license: GPLv3+
+author: bernardas.alisauskas@pm.me
+"""
+import click
+from apng import PNG, APNG
+
+
+@click.group()
+def main():
+    """split/join APNG files to PNG"""
+    pass
+
+
+@main.command('split')
+@click.argument('file', type=click.File('rb'))
+def cmd_split(file):
+    """split APNG file into multiple PNG files"""
+    filename = file.name
+    im = APNG.from_bytes(file.read())
+    for i, (png, control) in enumerate(im.frames):
+        with open(filename.replace('.png', f"_{i}.png"), 'wb') as f:
+            f.write(png.to_bytes())
+
+
+@main.command('join')
+@click.argument('filename')
+@click.argument('files', type=click.File('rb'), nargs=-1)
+def cmd_join(filename, files):
+    """split APNG file into multiple PNG files"""
+    im = APNG()
+    for file in files:
+        im.append(PNG.from_bytes(file.read()))
+    im.save(filename)
+
+
+if __name__ == "__main__":
+    main()
